@@ -1,0 +1,9 @@
+(jbuild_version 1)
+
+(executables
+ ((names (download_site))
+  (libraries (cohttp cohttp-lwt-unix core lwt))))
+
+(install
+ ((section bin)
+  (files ((download_site.o as download_site)))))

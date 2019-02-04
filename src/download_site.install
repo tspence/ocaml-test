@@ -1,0 +1,7 @@
+lib: [
+  "_build/install/default/lib/download_site/META" {"META"}
+  "_build/install/default/lib/download_site/opam" {"opam"}
+]
+bin: [
+  "_build/install/default/bin/download_site" {"download_site"}
+]
