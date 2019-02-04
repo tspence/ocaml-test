@@ -8,6 +8,10 @@ let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?
 let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
 let compiled_url_regex = Str.regexp "href=\\(\"[^\"]+?\"\\|\'[^\']+?\'\\)";;
 
+(* Get "len" number of characters at pos "pos" *)
+let substring (str: string) (pos: int) (len: int): string =
+    first_chars (string_after str pos) len;;
+
 (* Regex search for urls in an html page, using the str.regexp library *)
 let rec scan_for_urls ?(pos: int=0) ?(found: string list=[]) (rawfile: string) : string list =
     try
@@ -17,11 +21,11 @@ let rec scan_for_urls ?(pos: int=0) ?(found: string list=[]) (rawfile: string) :
         (* Get the string of the match *)
         let string_found = Str.matched_string rawfile in
 
-        (* Print what we found) *)
-        Printf.printf "Found %s\n" string_found;
+        (* Trim the href=" off the left and the " off the right *)
+        let string_trimmed = substring string_found 6 ((String.length string_found) - 7) in
 
         (* Prepend match to found list *)
-        let new_found = string_found :: found in
+        let new_found = string_trimmed :: found in
 
         (* Recurse *)
         scan_for_urls ~pos:(next_position + 1) ~found:new_found rawfile
@@ -42,11 +46,20 @@ let download_one_page (url: string): string Lwt.t =
      *)
     bodystring;;
 
+(* Merge a single URL *)
+let convert_relative_url (base_url: string) (ref_url: string): string =
+    if ((first_chars ref_url 1) = "/") then base_url ^ ref_url else ref_url;;
+
+(* Convert relative urls to full URLs *)
+let merge_url_with_refs (url: string) (reference_list: string list): string list =
+    List.map (fun str: string -> convert_relative_url url str) reference_list;;
+
 (* Function to download an html page, then scan it for further url references *)
 let scan_page_for_references (url: string) =
     let page_contents = Lwt_main.run (download_one_page url) in
     let reference_list = scan_for_urls page_contents in
-    reference_list;;
+    let merged_refs = merge_url_with_refs url reference_list in
+    merged_refs;;
 
 (* Program *)
 let () =
