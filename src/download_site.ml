@@ -40,11 +40,16 @@ let download_one_page (url: string): string Lwt.t =
     Printf.printf "Headers: %s\n" (resp |> Response.headers |> Header.to_string);
     Printf.printf "Body of length: %d\n" (String.length bodystring);
      *)
-    bodystring
+    bodystring;;
+
+(* Function to download an html page, then scan it for further url references *)
+let scan_page_for_references (url: string) =
+    let page_contents = Lwt_main.run (download_one_page url) in
+    let reference_list = scan_for_urls page_contents 0 [] in
+    reference_list;;
 
 (* Program *)
 let () =
-    let page_contents = Lwt_main.run (download_one_page "http://www.spence.net") in
-    let url_list = scan_for_urls page_contents 0 [] in
+    let url_list = scan_page_for_references "http://www.spence.net" in
     List.map (fun str: string -> Printf.printf "Found: %s\n" str; str) url_list;
-    Printf.printf "Done\n\n\n"
+    Printf.printf "Done\n\n\n";;
