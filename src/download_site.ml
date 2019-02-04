@@ -6,7 +6,7 @@ open Str
 
 let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?:\\(?:\\.[\\w_-]+\\)+\\)\\)\\([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-]\\)?";;
 let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
-let compiled_url_regex = Str.regexp "href=\\(\".*?\"\|\'.*?\'\\)";;
+let compiled_url_regex = Str.regexp "href=\\(\".*?\"\\|\'.*?\'\\)";;
 
 (* Regex search for urls in an html page *)
 let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string list =
@@ -24,7 +24,6 @@ let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string 
         let new_found = string_found :: found in
 
         (* Recurse *)
-        Printf.printf "Searching for more at position %d\n" next_position;
         scan_for_urls rawfile (next_position + 1) new_found
 
     (* If nothing else was found, this is our list *)
@@ -40,7 +39,14 @@ let download_one_page (url: string): string Lwt.t =
     Printf.printf "Body of length: %d\n" (String.length bodystring);
     bodystring
 
+let emit_string (str: string) =
+    Printf.printf "Found %s" str
+
 let () =
     let page_contents = Lwt_main.run (download_one_page "http://www.spence.net") in
     let url_list = scan_for_urls page_contents 0 [] in
+    Printf.printf "Found: %s\n" (String.concat url_list);
+    (*
+    List.fold_left ~f:emit_string ~init:0 url_list;
+    List.fold_left ~f:(fun a -> Printf.printf "Found: %s\n" a) ~init:0 url_list;*)
     Printf.printf "Done"
