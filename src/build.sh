@@ -1,1 +1,1 @@
-ocamlbuild -pkg cohttp-lwt-unix download_site.ml
+ocamlbuild -pkg cohttp-lwt-unix,Str download_site.native

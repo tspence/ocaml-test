@@ -4,9 +4,8 @@ open Cohttp
 open Cohttp_lwt_unix
 open Str
 
-let compiled_url_regex = Str.regexp "http";;
+let compiled_url_regex = Str.regexp "\"http[s].*\"";;
 
-(*
 (* Regex search for urls in an html page *)
 let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string list =
     try
@@ -17,17 +16,17 @@ let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string 
         let string_found = Str.matched_string rawfile in
 
         (* Print what we found) *)
-        Printf.printf "Found %s" string_found;
+        Printf.printf "Found %s\n" string_found;
 
         (* Prepend match to found list *)
         let new_found = string_found :: found in
 
         (* Recurse *)
+        Printf.printf "Searching for more at position %d\n" next_position;
         scan_for_urls rawfile (next_position + 1) new_found
 
     (* If nothing else was found, this is our list *)
     with Not_found -> found;;
-    *)
 
 (* Download one page using LWT async library *)
 let download_one_page (url: string): string Lwt.t =
@@ -41,4 +40,5 @@ let download_one_page (url: string): string Lwt.t =
 
 let () =
     let page_contents = Lwt_main.run (download_one_page "http://www.spence.net") in
-    print_endline ("Received body\n" ^ page_contents)
+    let url_list = scan_for_urls page_contents 0 [] in
+    Printf.printf "Done"
