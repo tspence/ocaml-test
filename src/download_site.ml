@@ -39,14 +39,8 @@ let download_one_page (url: string): string Lwt.t =
     Printf.printf "Body of length: %d\n" (String.length bodystring);
     bodystring
 
-let emit_string (str: string) =
-    Printf.printf "Found %s" str
-
 let () =
     let page_contents = Lwt_main.run (download_one_page "http://www.spence.net") in
     let url_list = scan_for_urls page_contents 0 [] in
-    Printf.printf "Found: %s\n" (String.concat url_list);
-    (*
-    List.fold_left ~f:emit_string ~init:0 url_list;
-    List.fold_left ~f:(fun a -> Printf.printf "Found: %s\n" a) ~init:0 url_list;*)
-    Printf.printf "Done"
+    List.map (fun str: string -> Printf.printf "Found: %s\n" str; str) url_list;
+    Printf.printf "Done\n\n\n"
