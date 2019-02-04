@@ -9,7 +9,7 @@ let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
 let compiled_url_regex = Str.regexp "href=\\(\"[^\"]+?\"\\|\'[^\']+?\'\\)";;
 
 (* Regex search for urls in an html page, using the str.regexp library *)
-let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string list =
+let rec scan_for_urls ?(pos: int=0) ?(found: string list=[]) (rawfile: string) : string list =
     try
         (* Find next match *)
         let next_position = Str.search_forward compiled_url_regex rawfile pos in
@@ -24,7 +24,7 @@ let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string 
         let new_found = string_found :: found in
 
         (* Recurse *)
-        scan_for_urls rawfile (next_position + 1) new_found
+        scan_for_urls ~pos:(next_position + 1) ~found:new_found rawfile
 
     (* If nothing else was found, this is our list *)
     with Not_found -> found;;
@@ -45,7 +45,7 @@ let download_one_page (url: string): string Lwt.t =
 (* Function to download an html page, then scan it for further url references *)
 let scan_page_for_references (url: string) =
     let page_contents = Lwt_main.run (download_one_page url) in
-    let reference_list = scan_for_urls page_contents 0 [] in
+    let reference_list = scan_for_urls page_contents in
     reference_list;;
 
 (* Program *)
