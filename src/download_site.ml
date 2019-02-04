@@ -4,7 +4,9 @@ open Cohttp
 open Cohttp_lwt_unix
 open Str
 
-let compiled_url_regex = Str.regexp "\"http[s].*\"";;
+let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?:\\(?:\\.[\\w_-]+\\)+\\)\\)\\([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-]\\)?";;
+let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
+let compiled_url_regex = Str.regexp "href=\\(\".*?\"\|\'.*?\'\\)";;
 
 (* Regex search for urls in an html page *)
 let rec scan_for_urls (rawfile: string) (pos: int) (found: string list): string list =
