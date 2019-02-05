@@ -3,6 +3,7 @@ open Lwt
 open Cohttp
 open Cohttp_lwt_unix
 open Str
+open Core_kernel
 
 let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?:\\(?:\\.[\\w_-]+\\)+\\)\\)\\([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-]\\)?";;
 let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
@@ -52,17 +53,30 @@ let convert_relative_url (base_url: string) (ref_url: string): string =
 
 (* Convert relative urls to full URLs *)
 let merge_url_with_refs (url: string) (reference_list: string list): string list =
-    List.map (fun str: string -> convert_relative_url url str) reference_list;;
+    List.map ~f:(fun str: string -> convert_relative_url url str) reference_list;;
+
+(* All the information we collect about a page *)
+type page_record = {
+    url: string;
+    contents: string;
+    references: string list;
+};;
 
 (* Function to download an html page, then scan it for further url references *)
-let scan_page_for_references (url: string) =
+let scan_page_for_references (url: string): page_record =
     let page_contents = Lwt_main.run (download_one_page url) in
     let reference_list = scan_for_urls page_contents in
     let merged_refs = merge_url_with_refs url reference_list in
-    merged_refs;;
+    {
+      url = url;
+      contents = page_contents;
+      references = merged_refs;
+    };;
 
 (* Program *)
 let () =
-    let url_list = scan_page_for_references "http://www.spence.net" in
-    List.map (fun str: string -> Printf.printf "Found: %s\n" str; str) url_list;
+    let p = scan_page_for_references "http://www.spence.net" in
+    Printf.printf "Page scanned: %s\n" p.url;
+    Printf.printf "Size: %d\n" (String.length p.contents);
+    Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) p.references);
     Printf.printf "Done\n\n\n";;
