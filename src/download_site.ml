@@ -4,6 +4,7 @@ open Cohttp
 open Cohttp_lwt_unix
 open Str
 open Core_kernel
+open Queue
 
 let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?:\\(?:\\.[\\w_-]+\\)+\\)\\)\\([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-]\\)?";;
 let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
@@ -31,8 +32,9 @@ let rec scan_for_urls ?(pos: int=0) ?(found: string list=[]) (rawfile: string) :
         (* Recurse *)
         scan_for_urls ~pos:(next_position + 1) ~found:new_found rawfile
 
-    (* If nothing else was found, this is our list *)
-    with Not_found -> found;;
+    (* If nothing else was found, this is our list.  Note two different
+       exceptions since one is deprecated *)
+    with _ -> found;;
 
 (* Download one page using LWT async library *)
 let download_one_page (url: string): string Lwt.t =
@@ -62,20 +64,36 @@ type page_record = {
     references: string list;
 };;
 
+(* Keep track of all references yet to scan *)
+let download_results = Hashtbl.create (module String);;
+
+(* Keep track of all references yet to scan *)
+let pending_urls = Queue.create ();;
+
 (* Function to download an html page, then scan it for further url references *)
-let scan_page_for_references (url: string): page_record =
+let scan_page (url: string): page_record =
     let page_contents = Lwt_main.run (download_one_page url) in
     let reference_list = scan_for_urls page_contents in
     let merged_refs = merge_url_with_refs url reference_list in
-    {
-      url = url;
-      contents = page_contents;
-      references = merged_refs;
-    };;
+    let page = {
+        url = url;
+        contents = page_contents;
+        references = merged_refs;
+    } in
+
+    (* Store this page so we don't have to do it again *)
+    Hashtbl.set download_results url page;
+
+    (* Store all the references in the queue *)
+    List.iter ~f:(fun s -> Printf.printf "Queueing %s...\n" s) merged_refs;
+    List.iter ~f:(fun s -> Queue.enqueue pending_urls s) merged_refs;
+
+    (* Here's the information about the page *)
+    page;;
 
 (* Program *)
 let () =
-    let p = scan_page_for_references "http://www.spence.net" in
+    let p = scan_page "http://www.spence.net" in
     Printf.printf "Page scanned: %s\n" p.url;
     Printf.printf "Size: %d\n" (String.length p.contents);
     Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) p.references);
