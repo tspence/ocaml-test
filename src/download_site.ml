@@ -71,28 +71,38 @@ let pending_urls = Queue.create ();;
 
 (* Function to download an html page, then scan it for further url references *)
 let scan_page (url: string): page_record =
-    Printf.printf "Downloading %s...\n" url;
-    let page_contents = Lwt_main.run (download_one_page url) in
-    let reference_list = scan_for_urls page_contents in
-    let merged_refs = merge_url_with_refs url reference_list in
-    let page = {
-        url = url;
-        contents = page_contents;
-        references = merged_refs;
-    } in
 
-    (* Store this page so we don't have to do it again *)
-    Hashtbl.set download_results url page;
+    (* Have we already scanned this page? If so, skip it *)
+    let existing = Hashtbl.find download_results url in
+    match existing with
+        | Some s ->
+            Printf.printf "Page %s already in cache.\n" url;
+            s
+        | None ->
 
-    (* Store all the references in the queue *)
-    let iterfun (s: string) =
-        (*Printf.printf "Queueing %s...\n" s;*)
-        Queue.enqueue pending_urls s
-        in
-    List.iter ~f:iterfun merged_refs;
+            (* Okay, let's can this page *)
+            Printf.printf "Downloading %s...\n" url;
+            let page_contents = Lwt_main.run (download_one_page url) in
+            let reference_list = scan_for_urls page_contents in
+            let merged_refs = merge_url_with_refs url reference_list in
+            let page = {
+                url = url;
+                contents = page_contents;
+                references = merged_refs;
+            } in
 
-    (* Here's the information about the page *)
-    page;;
+            (* Store this page so we don't have to do it again *)
+            Hashtbl.set download_results url page;
+
+            (* Store all the references in the queue *)
+            let iterfun (s: string) =
+                (*Printf.printf "Queueing %s...\n" s;*)
+                Queue.enqueue pending_urls s
+                in
+            List.iter ~f:iterfun merged_refs;
+
+            (* Here's the information about the page *)
+            page;;
 
 (* Print out information about a page *)
 let print_page_record (page: page_record) =
@@ -101,16 +111,32 @@ let print_page_record (page: page_record) =
     Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) page.references);
     Printf.printf "Done\n\n\n";;
 
+(* Determine if a URL is within a site *)
+let within_site (base_url: string) (url: string): bool =
+    let length_to_scan = min (String.length base_url) (String.length url) in
+    let left_snippet = first_chars base_url length_to_scan in
+    let right_snippet = first_chars url length_to_scan in
+    String.equal left_snippet right_snippet;;
+
 (* Scan a site, and all sites within it *)
 let scan_site (url: string) =
     Queue.enqueue pending_urls url;
     while (Queue.length pending_urls) > 0 do
-        let next_url_opt = Queue.dequeue pending_urls in
-        match next_url_opt with
+        match Queue.dequeue pending_urls with
           | Some next_url ->
-              let page = scan_page next_url in
-              Printf.printf "Queue length now %d.\n" (Queue.length pending_urls);
-              Some (print_page_record page);
+
+              (* We only want to scan it if it's underneath the main site *)
+              if within_site url next_url then begin
+                  let page = scan_page next_url in
+                  Printf.printf "Queue length now %d.\n" (Queue.length pending_urls);
+                  Some (print_page_record page);
+
+              (* If it's not within the main site, skip it *)
+              end else begin
+                  Printf.printf "Skipping %s; it's not within the site.\n" next_url;
+                  None;
+              end;
+
           | None -> None
     done;;
 
