@@ -4,7 +4,6 @@ open Cohttp
 open Cohttp_lwt_unix
 open Str
 open Core_kernel
-open Queue
 
 let full_compiled_url_regex = Str.regexp "\\(http|ftp|https\\)://\\([\\w_-]+\\(?:\\(?:\\.[\\w_-]+\\)+\\)\\)\\([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-]\\)?";;
 let old_compiled_url_regex = Str.regexp "\"\\(http\\|ftp\\|https\\)://.*\"";;
@@ -72,6 +71,7 @@ let pending_urls = Queue.create ();;
 
 (* Function to download an html page, then scan it for further url references *)
 let scan_page (url: string): page_record =
+    Printf.printf "Downloading %s...\n" url;
     let page_contents = Lwt_main.run (download_one_page url) in
     let reference_list = scan_for_urls page_contents in
     let merged_refs = merge_url_with_refs url reference_list in
@@ -85,16 +85,41 @@ let scan_page (url: string): page_record =
     Hashtbl.set download_results url page;
 
     (* Store all the references in the queue *)
-    List.iter ~f:(fun s -> Printf.printf "Queueing %s...\n" s) merged_refs;
-    List.iter ~f:(fun s -> Queue.enqueue pending_urls s) merged_refs;
+    let iterfun (s: string) =
+        (*Printf.printf "Queueing %s...\n" s;*)
+        Queue.enqueue pending_urls s
+        in
+    List.iter ~f:iterfun merged_refs;
 
     (* Here's the information about the page *)
     page;;
 
+(* Print out information about a page *)
+let print_page_record (page: page_record) =
+    Printf.printf "Page scanned: %s\n" page.url;
+    Printf.printf "Size: %d\n" (String.length page.contents);
+    Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) page.references);
+    Printf.printf "Done\n\n\n";;
+
+(* Scan a site, and all sites within it *)
+let scan_site (url: string) =
+    Queue.enqueue pending_urls url;
+    while (Queue.length pending_urls) > 0 do
+        let next_url_opt = Queue.dequeue pending_urls in
+        match next_url_opt with
+          | Some next_url ->
+              let page = scan_page next_url in
+              Printf.printf "Queue length now %d.\n" (Queue.length pending_urls);
+              Some (print_page_record page);
+          | None -> None
+    done;;
+
 (* Program *)
-let () =
-    let p = scan_page "http://www.spence.net" in
+scan_site "http://www.spence.net";;
+
+    (*in
     Printf.printf "Page scanned: %s\n" p.url;
     Printf.printf "Size: %d\n" (String.length p.contents);
     Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) p.references);
     Printf.printf "Done\n\n\n";;
+*)
