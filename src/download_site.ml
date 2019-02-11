@@ -50,7 +50,11 @@ let download_one_page (url: string): string Lwt.t =
 
 (* Merge a single URL *)
 let convert_relative_url (base_url: string) (ref_url: string): string =
-    if ((first_chars ref_url 1) = "/") then base_url ^ ref_url else ref_url;;
+    let l = String.length ref_url in
+    if ((l > 0) && ((first_chars ref_url 1) = "/")) then
+        base_url ^ ref_url
+    else
+        ref_url;;
 
 (* Convert relative urls to full URLs *)
 let merge_url_with_refs (url: string) (reference_list: string list): string list =
@@ -63,36 +67,53 @@ type page_record = {
     references: string list;
 };;
 
+(* Print out information about a page *)
+let print_page_record (page: page_record) =
+    Printf.printf "Page scanned: %s\n" page.url;
+    Printf.printf "Size: %d\n" (String.length page.contents);
+    Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) page.references);
+    Printf.printf "Done\n\n\n";;
+
 (* Keep track of all references yet to scan *)
 let download_results = Hashtbl.create (module String);;
 
 (* Keep track of all references yet to scan *)
 let pending_urls = Queue.create ();;
 
+let trim_trailing_slash (url: string): string =
+    let l = String.length url in
+    if ((l > 0) && (string_after url (l - 1)) = "/") then
+        (first_chars url (l - 1))
+    else
+        url;;
+
 (* Function to download an html page, then scan it for further url references *)
 let scan_page (url: string): page_record =
 
+    (* Trim the trailing slash, if any *)
+    let trimmed_url = trim_trailing_slash url in
+
     (* Have we already scanned this page? If so, skip it *)
-    let existing = Hashtbl.find download_results url in
+    let existing = Hashtbl.find download_results trimmed_url in
     match existing with
         | Some s ->
-            Printf.printf "Page %s already in cache.\n" url;
+            Printf.printf "Page %s already in cache.\n" trimmed_url;
             s
         | None ->
 
             (* Okay, let's can this page *)
-            Printf.printf "Downloading %s...\n" url;
-            let page_contents = Lwt_main.run (download_one_page url) in
+            Printf.printf "Downloading %s...\n" trimmed_url;
+            let page_contents = Lwt_main.run (download_one_page trimmed_url) in
             let reference_list = scan_for_urls page_contents in
-            let merged_refs = merge_url_with_refs url reference_list in
+            let merged_refs = merge_url_with_refs trimmed_url reference_list in
             let page = {
-                url = url;
+                url = trimmed_url;
                 contents = page_contents;
                 references = merged_refs;
             } in
 
             (* Store this page so we don't have to do it again *)
-            Hashtbl.set download_results url page;
+            Hashtbl.add_exn download_results ~key:trimmed_url ~data:page;
 
             (* Store all the references in the queue *)
             let iterfun (s: string) =
@@ -102,14 +123,8 @@ let scan_page (url: string): page_record =
             List.iter ~f:iterfun merged_refs;
 
             (* Here's the information about the page *)
+            (*print_page_record page;*)
             page;;
-
-(* Print out information about a page *)
-let print_page_record (page: page_record) =
-    Printf.printf "Page scanned: %s\n" page.url;
-    Printf.printf "Size: %d\n" (String.length page.contents);
-    Printf.printf "References: %d\n" (List.count ~f:(fun x -> true) page.references);
-    Printf.printf "Done\n\n\n";;
 
 (* Determine if a URL is within a site *)
 let within_site (base_url: string) (url: string): bool =
@@ -122,6 +137,7 @@ let within_site (base_url: string) (url: string): bool =
 let scan_site (url: string) =
     Queue.enqueue pending_urls url;
     while (Queue.length pending_urls) > 0 do
+        flush stdout;
         match Queue.dequeue pending_urls with
           | Some next_url ->
 
@@ -129,7 +145,7 @@ let scan_site (url: string) =
               if within_site url next_url then begin
                   let page = scan_page next_url in
                   Printf.printf "Queue length now %d.\n" (Queue.length pending_urls);
-                  Some (print_page_record page);
+                  Some page;
 
               (* If it's not within the main site, skip it *)
               end else begin
