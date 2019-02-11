@@ -88,7 +88,7 @@ let trim_trailing_slash (url: string): string =
         url;;
 
 (* Function to download an html page, then scan it for further url references *)
-let scan_page (url: string): page_record =
+let scan_page (url: string) =
 
     (* Trim the trailing slash, if any *)
     let trimmed_url = trim_trailing_slash url in
@@ -98,33 +98,35 @@ let scan_page (url: string): page_record =
     match existing with
         | Some s ->
             Printf.printf "Page %s already in cache.\n" trimmed_url;
-            s
+            Lwt.return s
         | None ->
 
             (* Okay, let's can this page *)
             Printf.printf "Downloading %s...\n" trimmed_url;
-            let page_contents = Lwt_main.run (download_one_page trimmed_url) in
-            let reference_list = scan_for_urls page_contents in
-            let merged_refs = merge_url_with_refs trimmed_url reference_list in
-            let page = {
-                url = trimmed_url;
-                contents = page_contents;
-                references = merged_refs;
-            } in
+            let page_contents_promise = download_one_page trimmed_url in
+            Lwt.bind page_contents_promise (fun (page_contents: string) ->
+                let reference_list = scan_for_urls page_contents in
+                let merged_refs = merge_url_with_refs trimmed_url reference_list in
+                let page = {
+                    url = trimmed_url;
+                    contents = page_contents;
+                    references = merged_refs;
+                } in
 
-            (* Store this page so we don't have to do it again *)
-            Hashtbl.add_exn download_results ~key:trimmed_url ~data:page;
+                (* Store this page so we don't have to do it again *)
+                Hashtbl.add_exn download_results ~key:trimmed_url ~data:page;
 
-            (* Store all the references in the queue *)
-            let iterfun (s: string) =
-                (*Printf.printf "Queueing %s...\n" s;*)
-                Queue.enqueue pending_urls s
-                in
-            List.iter ~f:iterfun merged_refs;
+                (* Store all the references in the queue *)
+                let iterfun (s: string) =
+                    (*Printf.printf "Queueing %s...\n" s;*)
+                    Queue.enqueue pending_urls s
+                    in
+                List.iter ~f:iterfun merged_refs;
 
-            (* Here's the information about the page *)
-            (*print_page_record page;*)
-            page;;
+                (* Here's the information about the page *)
+                (*print_page_record page;*)
+                Lwt.return page
+            );;
 
 (* Determine if a URL is within a site *)
 let within_site (base_url: string) (url: string): bool =
